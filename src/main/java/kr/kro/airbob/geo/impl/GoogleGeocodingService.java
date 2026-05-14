@@ -51,7 +51,7 @@ public class GoogleGeocodingService implements GeocodingService {
 			GoogleGeocodeResponse response = restTemplate.getForObject(url, GoogleGeocodeResponse.class);
 
 			if (response != null && OK.equals(response.getStatus()) && !response.getResults().isEmpty()) {
-				GoogleGeocodeResponse.Result result = response.getResults().getFirst();
+				GoogleGeocodeResponse.Result result = response.getResults().get(0);
 
 				return buildGeocodeResult(result);
 			} else {

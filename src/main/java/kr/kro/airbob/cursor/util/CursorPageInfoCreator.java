@@ -31,7 +31,7 @@ public class CursorPageInfoCreator {
 
 		String nextCursor = null;
 		if (hasNext) {
-			T lastEntity = content.getLast();
+			T lastEntity = content.get(content.size()-1);
 			CursorResponse.CursorData cursorData = CursorResponse.CursorData.builder()
 				.id(idExtractor.apply(lastEntity))
 				.lastCreatedAt(createdAtExtractor.apply(lastEntity))
@@ -64,7 +64,7 @@ public class CursorPageInfoCreator {
 
 		String nextCursor = null;
 		if (hasNext) {
-			T lastEntity = content.getLast();
+			T lastEntity = content.get(content.size()-1);
 			CursorResponse.ReviewCursorData reviewCursorData = new CursorResponse.ReviewCursorData(
 				idExtractor.apply(lastEntity),
 				createdAtExtractor.apply(lastEntity),

@@ -743,7 +743,7 @@ class WishlistServiceTest {
 
 			// Then
 			assertThat(response.wishlists()).hasSize(1);
-			assertThat(response.wishlists().getFirst().name()).isEqualTo("내 서울 여행");
+			assertThat(response.wishlists().get(0).name()).isEqualTo("내 서울 여행");
 
 			// 해당 사용자의 위시리스트만 조회되는지 확인
 			verify(wishlistRepository).findByMemberIdWithCursor(eq(currentMemberId), isNull(), isNull(), any(PageRequest.class));
@@ -2282,7 +2282,7 @@ class WishlistServiceTest {
 			// Then
 			assertThat(response.wishlistAccommodations()).hasSize(1);
 
-			WishlistResponse.WishlistAccommodationInfo item = response.wishlistAccommodations().getFirst();
+			WishlistResponse.WishlistAccommodationInfo item = response.wishlistAccommodations().get(0);
 			assertThat(item.id()).isEqualTo(30L);
 			assertThat(item.name()).isEqualTo("게스트하우스 메모");
 			assertThat(item.accommodationInfo().accommodationId()).isEqualTo(300L);

@@ -52,7 +52,7 @@ public class ReviewRepositoryImpl implements ReviewRepositoryCustom{
 
 		boolean hasNext = content.size() > pageable.getPageSize();
 		if (hasNext) {
-			content.removeLast();
+			content.remove(content.size() - 1);
 		}
 
 		return new SliceImpl<>(content, pageable, hasNext);
