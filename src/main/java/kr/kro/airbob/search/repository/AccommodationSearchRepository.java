@@ -1,8 +1,7 @@
 package kr.kro.airbob.search.repository;
 
-import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
-
 import kr.kro.airbob.search.document.AccommodationDocument;
+import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
 
 public interface AccommodationSearchRepository extends ElasticsearchRepository<AccommodationDocument, Long> {
 
