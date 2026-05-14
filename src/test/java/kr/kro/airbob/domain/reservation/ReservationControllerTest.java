@@ -43,6 +43,9 @@ public class ReservationControllerTest extends BaseControllerDocumentationTest {
     @MockitoBean
     private ReservationService reservationService;
 
+    @MockitoBean
+    private ReservationFacade reservationFacade;
+
     @Autowired
     private ReservationController reservationController;
 
@@ -54,7 +57,7 @@ public class ReservationControllerTest extends BaseControllerDocumentationTest {
 
     @BeforeEach
     void setup(RestDocumentationContextProvider restDocumentation) {
-        reservationController = new ReservationController(reservationService);
+        reservationController = new ReservationController(reservationService, reservationFacade);
         mockMvc = MockMvcBuilders.standaloneSetup(reservationController)
                 .apply(documentationConfiguration(restDocumentation))
                 .build();
@@ -76,7 +79,7 @@ public class ReservationControllerTest extends BaseControllerDocumentationTest {
                         .build();
 
 
-        given(reservationService.preReserveDates(eq(memberId), eq(accommodationId), any())).willReturn(true);
+        given(reservationFacade.preReserveDates(eq(accommodationId), any())).willReturn(true);
         given(reservationService.createReservation(eq(memberId), eq(accommodationId), any())).willReturn(createdReservationId);
 
         // when & then
@@ -115,7 +118,7 @@ public class ReservationControllerTest extends BaseControllerDocumentationTest {
                         .message("창문 있는 방 부탁드립니다.")
                         .build();
 
-        given(reservationService.preReserveDates(eq(memberId), eq(accommodationId), any()))
+        given(reservationFacade.preReserveDates(eq(accommodationId), any()))
                 .willReturn(false); // 예약 불가
 
         // when & then

@@ -11,6 +11,7 @@ import kr.kro.airbob.domain.member.Member;
 import kr.kro.airbob.domain.member.MemberRepository;
 import kr.kro.airbob.domain.member.common.MemberRole;
 import kr.kro.airbob.domain.reservation.dto.ReservationRequestDto;
+import kr.kro.airbob.domain.reservation.entity.Reservation;
 import kr.kro.airbob.domain.reservation.repository.ReservationRepository;
 import kr.kro.airbob.domain.reservation.repository.ReservedDateRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,9 @@ public class ReservationConcurrencyTest {
 
     @Autowired
     private ReservationService reservationService;
+
+    @Autowired
+    private ReservationFacade reservationFacade;
 
     @Autowired
     private MemberRepository memberRepository;
@@ -119,7 +123,7 @@ public class ReservationConcurrencyTest {
                 .district("종로구")
                 .street("세종대로")
                 .detail("101호")
-                .postalCode(1536)
+                .postalCode("1536")
                 .latitude(37.5665)
                 .longitude(126.9780)
                 .build();
@@ -135,7 +139,7 @@ public class ReservationConcurrencyTest {
         occupancyPolicyRepository.save(policy);
 
         // 3. 숙소 생성
-        Member host = memberRepository.findAll().getFirst(); // 첫 번째 멤버를 호스트로
+        Member host = memberRepository.findAll().get(0); // 첫 번째 멤버를 호스트로
         Accommodation accommodation = Accommodation.builder()
                         .name("테스트 숙소")
                         .description("편안한 숙소입니다")
@@ -174,7 +178,7 @@ public class ReservationConcurrencyTest {
                                     .message("동시성 테스트")
                                     .build();
 
-                    boolean reserved = reservationService.preReserveDates(memberId, accommodationId, dto);
+                    boolean reserved = reservationFacade.preReserveDates(accommodationId, dto);
 
                     if (reserved) {
                         reservationService.createReservation(memberId, accommodationId, dto);
@@ -207,6 +211,70 @@ public class ReservationConcurrencyTest {
         assertThat(reservationRepository.count())
                 .as("예약 테이블에는 단 하나의 예약만 존재해야 한다")
                 .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("동일 숙소에 대해 동일 날짜에 여러 사용자가 예약 진행 시 먼저 예약을 진행한 사용자의 예약이 DB에 등록되어야 한다.")
+    void firstAcquirer_ShouldCommitDataSuccessfully() throws InterruptedException {
+        // given
+        int threadCount = 100;
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatchForOthers = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+        Long accommodationId = accommodationRepository.findById(savedAccommodationId).get().getId();
+        LocalDate checkIn = LocalDate.of(2025, 6, 20);
+        LocalDate checkOut = LocalDate.of(2025, 6, 22);
+
+        ReservationRequestDto.CreateReservationDto dto =
+                ReservationRequestDto.CreateReservationDto.builder()
+                        .checkInDate(checkIn)
+                        .checkOutDate(checkOut)
+                        .message("동시성 테스트")
+                        .build();
+
+        // when
+        executorService.submit(() -> {
+            try {
+                boolean result = reservationFacade.preReserveDates(accommodationId, dto);
+                if (result) {
+                    reservationService.createReservation(1L, accommodationId, dto);
+                }
+            } finally {
+                doneLatch.countDown();
+            }
+        });
+
+        Thread.sleep(30);
+
+        for (int i = 2; i <= threadCount; i++) {
+            final long memberId = i;
+            executorService.submit(() -> {
+                try {
+                    startLatchForOthers.await();
+                    boolean result = reservationFacade.preReserveDates(accommodationId, dto);
+                    if (result) {
+                        reservationService.createReservation(memberId, accommodationId, dto);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatchForOthers.countDown();
+
+        doneLatch.await();
+        executorService.shutdown();
+
+        // then
+         List<Reservation> allReservations = reservationRepository.findAll();
+
+        // 예약은 반드시 1개여야 하고, 그 주인은 반드시 1번이어야 함
+        assertThat(allReservations).hasSize(1);
+        assertThat(allReservations.get(0).getGuest().getId()).isEqualTo(1L);
     }
 
 }

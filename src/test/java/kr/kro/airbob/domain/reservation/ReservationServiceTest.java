@@ -55,6 +55,9 @@ public class ReservationServiceTest {
     @InjectMocks
     private ReservationService reservationService;
 
+    @InjectMocks
+    private ReservationFacade reservationFacade;
+
     @Test
     @DisplayName("예약하려는 숙소, 날짜에 lock을 획득하지 못하면 임시 예약이 실패해야 한다.")
     void preReserveDates_lockAcquisitionFail() {
@@ -82,7 +85,7 @@ public class ReservationServiceTest {
                 .willReturn(false);
 
         // when
-        boolean result = reservationService.preReserveDates(userId, accommodationId, dto);
+        boolean result = reservationFacade.preReserveDates(accommodationId, dto);
 
         // then
         assertThat(result).isFalse();
@@ -115,7 +118,7 @@ public class ReservationServiceTest {
                 .willReturn(List.of(mock(ReservedDate.class)));
 
         // when
-        boolean result = reservationService.preReserveDates(userId, accommodationId, dto);
+        boolean result = reservationFacade.preReserveDates(accommodationId, dto);
 
         // then
         assertThat(result).isFalse();
@@ -150,7 +153,7 @@ public class ReservationServiceTest {
         given(reservedDateRepository.findReservedDates(accommodationId, checkIn, checkOut)).willReturn(Collections.emptyList());
 
         // when
-        boolean result = reservationService.preReserveDates(userId, accommodationId, dto);
+        boolean result = reservationFacade.preReserveDates(accommodationId, dto);
 
         // then
         assertThat(result).isTrue();
