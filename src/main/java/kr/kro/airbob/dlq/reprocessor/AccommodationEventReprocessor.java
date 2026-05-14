@@ -13,7 +13,7 @@ import kr.kro.airbob.search.service.AccommodationIndexUpdater;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-@Component
+//@Component
 @Slf4j
 @RequiredArgsConstructor
 public class AccommodationEventReprocessor {

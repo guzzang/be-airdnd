@@ -16,7 +16,7 @@ import kr.kro.airbob.search.dto.AccommodationSearchResponse;
 import kr.kro.airbob.search.service.AccommodationSearchService;
 import lombok.RequiredArgsConstructor;
 
-@RestController
+//@RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/search")
 public class AccommodationSearchController {

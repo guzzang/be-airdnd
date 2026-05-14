@@ -19,7 +19,7 @@ import kr.kro.airbob.dlq.reprocessor.AccommodationEventReprocessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-@Service
+//@Service
 @Slf4j
 @RequiredArgsConstructor
 public class DeadLetterQueueService {

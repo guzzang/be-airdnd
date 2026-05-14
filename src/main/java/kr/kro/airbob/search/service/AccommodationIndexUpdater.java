@@ -17,7 +17,7 @@ import kr.kro.airbob.domain.review.AccommodationReviewSummary;
 import kr.kro.airbob.domain.review.repository.AccommodationReviewSummaryRepository;
 import lombok.RequiredArgsConstructor;
 
-@Component
+//@Component
 @RequiredArgsConstructor
 public class AccommodationIndexUpdater {
 

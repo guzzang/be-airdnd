@@ -27,7 +27,7 @@ import kr.kro.airbob.search.dto.AccommodationSearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-@Service
+//@Service
 @Slf4j
 @RequiredArgsConstructor
 public class AccommodationSearchService {
