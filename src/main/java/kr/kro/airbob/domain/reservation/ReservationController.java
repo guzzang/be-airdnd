@@ -15,6 +15,7 @@ import java.util.Map;
 public class ReservationController {
 
     private final ReservationService reservationService;
+    private final ReservationFacade reservationFacade;
 
     @PostMapping("/{accommodationId}")
     public ResponseEntity<Map<String,Long>> createReservation(
@@ -24,7 +25,7 @@ public class ReservationController {
         //todo 커스텀 에러 생성
         Long memberId = (Long) request.getAttribute("memberId");
 
-        if(!reservationService.preReserveDates(memberId, accommodationId, createReservationDto)){
+        if(!reservationFacade.preReserveDates(accommodationId, createReservationDto)){
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
 
