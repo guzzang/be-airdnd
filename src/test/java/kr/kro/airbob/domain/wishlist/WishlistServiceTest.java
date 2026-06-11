@@ -1,9 +1,5 @@
 package kr.kro.airbob.domain.wishlist;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.BDDMockito.*;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -51,6 +47,10 @@ import kr.kro.airbob.domain.wishlist.exception.WishlistAccommodationNotFoundExce
 import kr.kro.airbob.domain.wishlist.exception.WishlistNotFoundException;
 import kr.kro.airbob.domain.wishlist.repository.WishlistAccommodationRepository;
 import kr.kro.airbob.domain.wishlist.repository.WishlistRepository;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.BDDMockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("위시리스트 서비스 테스트")
