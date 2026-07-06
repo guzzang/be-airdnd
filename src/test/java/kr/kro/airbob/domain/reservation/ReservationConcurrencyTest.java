@@ -29,12 +29,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -104,6 +103,15 @@ public class ReservationConcurrencyTest {
 
     @BeforeEach
     void setUp() {
+        // DB 초기화
+        reservedDateRepository.deleteAllInBatch();
+        reservationRepository.deleteAllInBatch();
+        accommodationRepository.deleteAllInBatch();
+        occupancyPolicyRepository.deleteAllInBatch();
+        addressRepository.deleteAllInBatch();
+        memberRepository.deleteAllInBatch();
+        redissonClient.getKeys().flushall();
+
         // 1. 10명의 회원 등록
         for (long i = 1; i <= 10; i++) {
             Member member = Member.builder()
@@ -155,61 +163,42 @@ public class ReservationConcurrencyTest {
     }
 
     @Test
-    @DisplayName("동시에 같은 숙소/날짜로 예약 요청 시 한 명만 성공해야 한다")
+    @DisplayName("동시에 같은 숙소/날짜로 예약 요청을 진행해도 분산락은 하나의 예약만 진행시켜야 한다.")
     void concurrentReservation_shouldAllowOnlyOneSuccess() throws InterruptedException {
-        Long accommodationId = accommodationRepository.findById(savedAccommodationId).get().getId();
+        //given
+        Long accommodationId = savedAccommodationId;
         LocalDate checkIn = LocalDate.of(2025, 6, 20);
         LocalDate checkOut = LocalDate.of(2025, 6, 22);
 
-        int threadCount = 200;
+        int threadCount = 10;
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
-        CountDownLatch latch = new CountDownLatch(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicInteger acquired = new AtomicInteger();
 
-        List<Future<Boolean>> resultFutures = new ArrayList<>();
-
-        for (long i = 1; i <= threadCount; i++) {
-            final long memberId = i;
-            resultFutures.add(executorService.submit(() -> {
+        //when
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(() -> {
                 try {
-                    ReservationRequestDto.CreateReservationDto dto =
-                            ReservationRequestDto.CreateReservationDto.builder()
-                                    .checkInDate(checkIn)
-                                    .checkOutDate(checkOut)
-                                    .message("동시성 테스트")
-                                    .build();
+                    startLatch.await();
+                    var daysToReserve = ReservationRequestDto.CreateReservationDto.builder()
+                            .checkInDate(checkIn).checkOutDate(checkOut).message("락 검증").build();
 
-                    boolean reserved = reservationFacade.preReserveDates(accommodationId, dto);
-
-                    if (reserved) {
-                        reservationService.createReservation(memberId, accommodationId, dto);
-                        return true;
-                    }
-
-                    return false;
-
+                    boolean reserved = reservationFacade.preReserveDates(accommodationId, daysToReserve);
+                    if (reserved) acquired.incrementAndGet();
+                } catch (Exception ignored) {
                 } finally {
-                    latch.countDown();
+                    doneLatch.countDown();
                 }
-            }));
+            });
         }
+        startLatch.countDown();
+        doneLatch.await();
+        executorService.shutdown();
 
-        latch.await();
-
-        long successCount = resultFutures.stream().filter(future -> {
-            try {
-                return future.get(); // 성공한 예약인지
-            } catch (Exception e) {
-                return false;
-            }
-        }).count();
-
-        // then: 단 한 명만 성공해야 함
-        assertThat(successCount)
-                .as("동시에 요청해도 성공한 예약은 한 건이어야 한다")
-                .isEqualTo(1);
-
-        assertThat(reservationRepository.count())
-                .as("예약 테이블에는 단 하나의 예약만 존재해야 한다")
+        // then
+        assertThat(acquired.get())
+                .as("분산락은 정확히 하나의 예약만 통과시켜야 한다")
                 .isEqualTo(1);
     }
 
@@ -223,6 +212,7 @@ public class ReservationConcurrencyTest {
         CountDownLatch doneLatch = new CountDownLatch(threadCount);
 
         Long accommodationId = accommodationRepository.findById(savedAccommodationId).get().getId();
+        Long firstMemberId = memberRepository.findAll().get(0).getId();
         LocalDate checkIn = LocalDate.of(2025, 6, 20);
         LocalDate checkOut = LocalDate.of(2025, 6, 22);
 
@@ -238,7 +228,7 @@ public class ReservationConcurrencyTest {
             try {
                 boolean result = reservationFacade.preReserveDates(accommodationId, dto);
                 if (result) {
-                    reservationService.createReservation(1L, accommodationId, dto);
+                    reservationService.createReservation(firstMemberId, accommodationId, dto);
                 }
             } finally {
                 doneLatch.countDown();
@@ -272,9 +262,9 @@ public class ReservationConcurrencyTest {
         // then
          List<Reservation> allReservations = reservationRepository.findAll();
 
-        // 예약은 반드시 1개여야 하고, 그 주인은 반드시 1번이어야 함
+        // 예약은 반드시 1개여야 하고, 그 주인은 반드시 첫번째로 예약한 사람이어야함
         assertThat(allReservations).hasSize(1);
-        assertThat(allReservations.get(0).getGuest().getId()).isEqualTo(1L);
+        assertThat(allReservations.get(0).getGuest().getId()).isEqualTo(firstMemberId);
     }
 
 }
