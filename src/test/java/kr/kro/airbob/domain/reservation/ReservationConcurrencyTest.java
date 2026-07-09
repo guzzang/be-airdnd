@@ -29,6 +29,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -265,6 +266,52 @@ public class ReservationConcurrencyTest {
         // 예약은 반드시 1개여야 하고, 그 주인은 반드시 첫번째로 예약한 사람이어야함
         assertThat(allReservations).hasSize(1);
         assertThat(allReservations.get(0).getGuest().getId()).isEqualTo(firstMemberId);
+    }
+
+    @Test
+    @DisplayName("락이 동작하지 않아도 DB UNIQUE 제약이 중복 예약을 최종적으로 막아야 한다.")
+    void dbUnique_blocksDuplicate_evenWithoutLock() throws InterruptedException {
+        Long accommodationId = savedAccommodationId;
+        LocalDate checkIn = LocalDate.of(2025, 6, 20);
+        LocalDate checkOut = LocalDate.of(2025, 6, 22);
+        long daysToReserve = ChronoUnit.DAYS.between(checkIn, checkOut);
+
+        int threadCount = 10;
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch  = new CountDownLatch(threadCount);
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger blocked = new AtomicInteger();
+
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(() -> {
+                try {
+                    startLatch.await();
+                    var dto = ReservationRequestDto.CreateReservationDto.builder()
+                            .checkInDate(checkIn).checkOutDate(checkOut).message("unique 검증").build();
+
+                    reservationService.createPreReservation(accommodationId, dto, daysToReserve);
+                    success.incrementAndGet();
+
+                } catch (Exception e) {
+                    blocked.incrementAndGet();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        doneLatch.await();
+        executorService.shutdown();
+
+        // then
+        assertThat(success.get())
+                .as("락이 없어도 DB UNIQUE 제약으로 하나의 예약만 저장에 성공해야한다.")
+                .isEqualTo(1);
+        assertThat(blocked.get())
+                .as("나머지는 UNIQUE 제약 위반으로 차단되어야 한다.")
+                .isEqualTo(threadCount - 1);
     }
 
 }
