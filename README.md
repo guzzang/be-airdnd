@@ -57,6 +57,8 @@
 - **100개 스레드 동시 예약** → 먼저 락을 획득한 **1건만 저장** 확인
 - **락을 우회한 동시 요청** → **DB UNIQUE 제약이 최종적으로 중복 예약을 차단** 확인
 
+🔗 [관련 테스트 코드](src/test/java/kr/kro/airbob/domain/reservation/ReservationConcurrencyTest.java)
+
 <br>
 
 ## flyway를 통한 DB 스키마 관리 
