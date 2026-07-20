@@ -45,7 +45,7 @@
 | 구분 | 기술 |
 |---|---|
 | **Backend** | Java, Spring Boot, Spring Data JPA |
-| **Database** | MySQL, Redis (Redisson) |
+| **Database** | MySQL, Redis |
 | **Infra** | AWS EC2, RDS, S3, ELB, CodeDeploy |
 | **Test / Docs** | Testcontainers, Flyway, Spring REST Docs |
 
