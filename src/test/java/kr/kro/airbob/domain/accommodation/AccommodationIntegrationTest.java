@@ -199,7 +199,7 @@ public class AccommodationIntegrationTest {
         // 주소 정보 확인
         Address newAddress = updated.getAddress();
         assertThat(newAddress.getCity()).isEqualTo("Busan");
-        assertThat(newAddress.getPostalCode()).isEqualTo(54321);
+        assertThat(newAddress.getPostalCode()).isEqualTo("54321");
         assertThat(newAddress.getDetail()).isEqualTo("202");
 
         // 점유 정책 정보 확인
