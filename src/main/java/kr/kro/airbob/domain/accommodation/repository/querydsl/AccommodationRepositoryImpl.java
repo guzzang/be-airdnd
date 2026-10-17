@@ -39,16 +39,24 @@ public class AccommodationRepositoryImpl implements AccommodationRepositoryCusto
         addFilterClause(condition, builder);
         //필터링 조건으로 결과 생성
         List<Tuple> resultList = makeResultByFilter(builder, pageable);
+        List<Long> accommodationIds = resultList.stream()
+                .map(t -> t.get(accommodation).getId())
+                .distinct()
+                .toList();
         //이슈별 리뷰 정보 맵 생성
-        Map<Long, Tuple> reviewMap = makeReviewMapByAccommodation();
+        Map<Long, Tuple> reviewMap = makeReviewMapByAccommodation(accommodationIds);
 
         return new ArrayList<>(getSearchResults(resultList, reviewMap).values());
     }
 
-    private Map<Long, Tuple> makeReviewMapByAccommodation() {
+    private Map<Long, Tuple> makeReviewMapByAccommodation(List<Long> accommodationIds) {
+        if (accommodationIds.isEmpty()) {
+            return Map.of();
+        }
         return jpaQueryFactory
                 .select(review.accommodation.id, review.rating.avg(), review.count())
                 .from(review)
+                .where(review.accommodation.id.in(accommodationIds))
                 .groupBy(review.accommodation.id)
                 .fetch()
                 .stream()
