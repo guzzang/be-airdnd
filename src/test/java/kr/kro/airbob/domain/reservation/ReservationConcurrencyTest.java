@@ -168,8 +168,8 @@ public class ReservationConcurrencyTest {
     void concurrentReservation_shouldAllowOnlyOneSuccess() throws InterruptedException {
         //given
         Long accommodationId = savedAccommodationId;
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 22);
+        LocalDate checkIn = LocalDate.now().plusMonths(1);
+        LocalDate checkOut = checkIn.plusDays(2);
 
         int threadCount = 10;
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
@@ -214,8 +214,8 @@ public class ReservationConcurrencyTest {
 
         Long accommodationId = accommodationRepository.findById(savedAccommodationId).get().getId();
         Long firstMemberId = memberRepository.findAll().get(0).getId();
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 22);
+        LocalDate checkIn = LocalDate.now().plusMonths(1);
+        LocalDate checkOut = checkIn.plusDays(2);
 
         ReservationRequestDto.CreateReservationDto dto =
                 ReservationRequestDto.CreateReservationDto.builder()
@@ -272,8 +272,8 @@ public class ReservationConcurrencyTest {
     @DisplayName("락이 동작하지 않아도 DB UNIQUE 제약이 중복 예약을 최종적으로 막아야 한다.")
     void dbUnique_blocksDuplicate_evenWithoutLock() throws InterruptedException {
         Long accommodationId = savedAccommodationId;
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 22);
+        LocalDate checkIn = LocalDate.now().plusMonths(1);
+        LocalDate checkOut = checkIn.plusDays(2);
         long daysToReserve = ChronoUnit.DAYS.between(checkIn, checkOut);
 
         int threadCount = 10;
