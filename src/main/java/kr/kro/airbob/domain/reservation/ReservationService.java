@@ -55,7 +55,7 @@ public class ReservationService {
         Accommodation accommodation = accommodationRepository.findById(accommodationId)
                 .orElseThrow(AccommodationNotFoundException::new);
 
-        for (int n = 0; n < daysToReserve - 1; n++) {
+        for (int n = 0; n < daysToReserve; n++) {
             ReservedDate reservedDate = ReservedDate.builder()
                     .reservedAt(createReservationDto.getCheckInDate().plusDays(n))
                     .status(ReservationStatus.PENDING)
