@@ -20,8 +20,13 @@ public class ReservationFacade {
 
     private final RedissonClient redissonClient;
     private final ReservationService reservationService;
+    private final BookedDateCache bookedDateCache;
 
     public boolean preReserveDates(Long accommodationId, ReservationRequestDto.CreateReservationDto createReservationDto) {
+        if (isAlreadyBooked(accommodationId, createReservationDto)) {
+            return false;
+        }
+
         long daysToReserve = ChronoUnit.DAYS.between(createReservationDto.getCheckInDate(), createReservationDto.getCheckOutDate());
         List<RLock> acquiredLockKeys = new ArrayList<>();
 
@@ -42,7 +47,11 @@ public class ReservationFacade {
 
             log.info("[{}] 락 획득 성공", Thread.currentThread().getName());
 
-            return reservationService.createPreReservation(accommodationId, createReservationDto, daysToReserve);
+            boolean reserved = reservationService.createPreReservation(accommodationId, createReservationDto, daysToReserve);
+            if (reserved) {
+                addBookedDates(accommodationId, createReservationDto);
+            }
+            return reserved;
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -52,6 +61,23 @@ public class ReservationFacade {
                 multiLock.unlock();
                 log.info("[{}] 락 반납 완료", Thread.currentThread().getName());
             }
+        }
+    }
+
+    private boolean isAlreadyBooked(Long accommodationId, ReservationRequestDto.CreateReservationDto dto) {
+        try {
+            return bookedDateCache.isAnyBooked(accommodationId, dto.getCheckInDate(), dto.getCheckOutDate());
+        } catch (Exception e) {
+            log.warn("예약 날짜 캐시 확인 실패, DB 재확인으로 진행 accommodationId={}", accommodationId, e);
+            return false;
+        }
+    }
+
+    private void addBookedDates(Long accommodationId, ReservationRequestDto.CreateReservationDto dto) {
+        try {
+            bookedDateCache.add(accommodationId, dto.getCheckInDate(), dto.getCheckOutDate());
+        } catch (Exception e) {
+            log.warn("예약 날짜 캐시 반영 실패 accommodationId={}", accommodationId, e);
         }
     }
 }
