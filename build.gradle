@@ -58,9 +58,6 @@ dependencies {
 	//Redis
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-	//Redisson
-	implementation 'org.redisson:redisson:3.28.0'
-
 	// Flyway
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-mysql'

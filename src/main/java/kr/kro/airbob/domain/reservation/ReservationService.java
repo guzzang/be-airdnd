@@ -109,7 +109,7 @@ public class ReservationService {
         LocalDate checkIn = reservation.getCheckIn().toLocalDate();
         LocalDate checkOut = reservation.getCheckOut().toLocalDate();
 
-        bookedDateCache.remove(accommodationId, checkIn, checkOut);
+        bookedDateCache.release(accommodationId, checkIn, checkOut);
 
         reservedDateRepository.deleteReservedDates(accommodationId, checkIn, checkOut);
         reservationRepository.delete(reservation);
