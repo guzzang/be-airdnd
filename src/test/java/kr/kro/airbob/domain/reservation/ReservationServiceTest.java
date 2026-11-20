@@ -18,10 +18,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.redisson.api.RBucket;
-import org.redisson.api.RedissonClient;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.springframework.context.ApplicationEventPublisher;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
@@ -30,7 +30,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -38,7 +37,10 @@ import static org.mockito.Mockito.*;
 public class ReservationServiceTest {
 
     @Mock
-    private RedissonClient redissonClient;
+    private BookedDateCache bookedDateCache;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @Mock
     private MemberRepository memberRepository;
@@ -55,17 +57,13 @@ public class ReservationServiceTest {
     @InjectMocks
     private ReservationService reservationService;
 
-    @InjectMocks
-    private ReservationFacade reservationFacade;
-
     @Test
-    @DisplayName("예약하려는 숙소, 날짜에 lock을 획득하지 못하면 임시 예약이 실패해야 한다.")
-    void preReserveDates_lockAcquisitionFail() {
+    @DisplayName("예약하려는 날짜에 DB 예약이 있으면 임시 예약이 실패하고 아무것도 저장하지 않는다.")
+    void createPreReservation_alreadyReserved() {
         // given
-        Long userId = 1L;
         Long accommodationId = 1L;
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 23);
+        LocalDate checkIn = LocalDate.of(2028, 5, 1);
+        LocalDate checkOut = LocalDate.of(2028, 5, 4);
 
         ReservationRequestDto.CreateReservationDto dto =
                 ReservationRequestDto.CreateReservationDto.builder()
@@ -73,65 +71,24 @@ public class ReservationServiceTest {
                         .checkOutDate(checkOut)
                         .build();
 
-        RBucket lockBucket = mock(RBucket.class);
-
-        // 첫번째 락은 잡히고, 두번째 락 잡기 실패 시뮬레이션
-        // redissonClient.getBucket() 호출 시 항상 같은 mock 리턴
-        given(redissonClient.getBucket(anyString())).willReturn(lockBucket);
-
-        // 첫 번째 호출 true, 두 번째 호출 false (락 획득 실패)
-        given(lockBucket.setIfAbsent(anyString(), any(Duration.class)))
-                .willReturn(true)
-                .willReturn(false);
-
-        // when
-        boolean result = reservationFacade.preReserveDates(accommodationId, dto);
-
-        // then
-        assertThat(result).isFalse();
-    }
-
-    @Test
-    @DisplayName("예약하려는 날짜에 예약이 되어있으면 임시 예약이 실패해야 한다.")
-    void preReserveDates_alreadyReservedDatesExist() {
-        // given
-        Long userId = 1L;
-        Long accommodationId = 1L;
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 23);
-
-        ReservationRequestDto.CreateReservationDto dto =
-                ReservationRequestDto.CreateReservationDto.builder()
-                        .checkInDate(checkIn)
-                        .checkOutDate(checkOut)
-                        .build();
-
-        RBucket lockBucket = mock(RBucket.class);
-
-        given(redissonClient.getBucket(anyString())).willReturn(lockBucket);
-        given(lockBucket.setIfAbsent(anyString(), any(Duration.class)))
-                .willReturn(true)
-                .willReturn(true);
-
-        // 이미 예약된 날짜가 존재하는 상황
         given(reservedDateRepository.findReservedDates(accommodationId, checkIn, checkOut))
                 .willReturn(List.of(mock(ReservedDate.class)));
 
         // when
-        boolean result = reservationFacade.preReserveDates(accommodationId, dto);
+        boolean result = reservationService.createPreReservation(accommodationId, dto, 3);
 
         // then
         assertThat(result).isFalse();
+        verify(reservedDateRepository, never()).saveAll(any());
     }
 
     @Test
-    @DisplayName("예약하려는 숙소와 날짜에 lock이 없고 예약되어 있지 않으면 임시 예약에 성공해야 한다.")
-    void preReserveDates_success() {
+    @DisplayName("예약하려는 날짜가 비어 있으면 숙박일 수만큼 PENDING 날짜를 저장한다.")
+    void createPreReservation_success_savesEveryNight() {
         // given
-        Long userId = 1L;
         Long accommodationId = 1L;
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 23);
+        LocalDate checkIn = LocalDate.of(2028, 5, 1);
+        LocalDate checkOut = LocalDate.of(2028, 5, 4);
 
         ReservationRequestDto.CreateReservationDto dto =
                 ReservationRequestDto.CreateReservationDto.builder()
@@ -139,24 +96,23 @@ public class ReservationServiceTest {
                         .checkOutDate(checkOut)
                         .build();
 
-        Accommodation accommodation = mock(Accommodation.class);
-        RBucket lockBucket = mock(RBucket.class);
-
-        given(accommodationRepository.findById(accommodationId)).willReturn(Optional.of(accommodation));
-
-        given(redissonClient.getBucket(anyString())).willReturn(lockBucket);
-        given(lockBucket.setIfAbsent(anyString(), any(Duration.class)))
-                .willReturn(true)
-                .willReturn(true);
-
-        // DB에 예약된 날짜 없음
-        given(reservedDateRepository.findReservedDates(accommodationId, checkIn, checkOut)).willReturn(Collections.emptyList());
+        given(reservedDateRepository.findReservedDates(accommodationId, checkIn, checkOut))
+                .willReturn(Collections.emptyList());
+        given(accommodationRepository.findById(accommodationId)).willReturn(Optional.of(mock(Accommodation.class)));
 
         // when
-        boolean result = reservationFacade.preReserveDates(accommodationId, dto);
+        boolean result = reservationService.createPreReservation(accommodationId, dto, 3);
 
         // then
         assertThat(result).isTrue();
+        ArgumentCaptor<List<ReservedDate>> captor = ArgumentCaptor.forClass(List.class);
+        verify(reservedDateRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(ReservedDate::getReservedAt)
+                .containsExactly(checkIn, checkIn.plusDays(1), checkIn.plusDays(2));
+        assertThat(captor.getValue())
+                .extracting(ReservedDate::getStatus)
+                .containsOnly(ReservationStatus.PENDING);
     }
 
     @Test
@@ -213,6 +169,33 @@ public class ReservationServiceTest {
         assertThat(reservedDate2.getStatus()).isEqualTo(ReservationStatus.COMPLETED);
     }
 
+
+    @Test
+    @DisplayName("예약을 취소하면 Redis 선점을 되돌린 뒤 예약 날짜와 예약을 삭제한다.")
+    void cancelReservation_releasesCacheThenDeletes() {
+        // given
+        Long reservationId = 1L;
+        Long accommodationId = 1L;
+        LocalDate checkIn = LocalDate.of(2028, 5, 1);
+        LocalDate checkOut = LocalDate.of(2028, 5, 3);
+
+        Accommodation accommodation = mock(Accommodation.class);
+        Reservation reservation = mock(Reservation.class);
+        given(accommodation.getId()).willReturn(accommodationId);
+        given(reservation.getAccommodation()).willReturn(accommodation);
+        given(reservation.getCheckIn()).willReturn(checkIn.atTime(15, 0));
+        given(reservation.getCheckOut()).willReturn(checkOut.atTime(11, 0));
+        given(reservationRepository.findById(reservationId)).willReturn(Optional.of(reservation));
+
+        // when
+        reservationService.cancelReservation(reservationId);
+
+        // then
+        InOrder inOrder = inOrder(bookedDateCache, reservedDateRepository, reservationRepository);
+        inOrder.verify(bookedDateCache).release(accommodationId, checkIn, checkOut);
+        inOrder.verify(reservedDateRepository).deleteReservedDates(accommodationId, checkIn, checkOut);
+        inOrder.verify(reservationRepository).delete(reservation);
+    }
 
     @Test
     @DisplayName("존재하지 않는 유저가 예약하려고 하면 예외가 발생해야 한다.")
