@@ -26,8 +26,10 @@ import kr.kro.airbob.search.dto.AccommodationSearchRequest;
 import kr.kro.airbob.search.dto.AccommodationSearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import kr.kro.airbob.search.ConditionalOnSearchEnabled;
 
 @Service
+@ConditionalOnSearchEnabled
 @Slf4j
 @RequiredArgsConstructor
 public class AccommodationSearchService {

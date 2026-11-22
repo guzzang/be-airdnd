@@ -110,6 +110,8 @@ public class ReservationConcurrencyTest {
         // Redis
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+
+        registry.add("search.enabled", () -> "false");
     }
 
     @BeforeEach

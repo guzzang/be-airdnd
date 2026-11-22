@@ -18,8 +18,10 @@ import kr.kro.airbob.domain.review.AccommodationReviewSummary;
 import kr.kro.airbob.domain.review.repository.AccommodationReviewSummaryRepository;
 import kr.kro.airbob.search.document.AccommodationDocument;
 import lombok.RequiredArgsConstructor;
+import kr.kro.airbob.search.ConditionalOnSearchEnabled;
 
 @Component
+@ConditionalOnSearchEnabled
 @RequiredArgsConstructor
 public class AccommodationDocumentBuilder {
 

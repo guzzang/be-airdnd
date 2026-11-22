@@ -35,3 +35,6 @@ management:
     web:
       exposure:
         include: metrics
+
+search:
+  enabled: false            # Elasticsearch 없이 실행 (검색 API·색인·DLQ Bean 비활성화)
