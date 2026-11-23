@@ -17,6 +17,11 @@ spring:
         show_sql: false
         format_sql: false
 
+server:
+  tomcat:
+    mbeanregistry:
+      enabled: true          # actuator에 tomcat.threads.busy(사용 중 요청 스레드 수)를 노출
+
 slack:
   notification:
     enabled: false           # 부하 테스트 중 팀 Slack으로 알림이 가지 않도록
@@ -24,3 +29,12 @@ slack:
 logging:
   level:
     root: WARN               # 인증 필터가 요청마다 찍는 INFO 로그 차단
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: metrics
+
+search:
+  enabled: false            # Elasticsearch 없이 실행 (검색 API·색인·DLQ Bean 비활성화)

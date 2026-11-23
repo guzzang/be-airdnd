@@ -31,6 +31,7 @@ import static kr.kro.airbob.search.event.AccommodationIndexingEvents.Reservation
 @Slf4j
 public class ReservationService {
 
+    private final BookedDateCache bookedDateCache;
     private final ReservationRepository reservationRepository;
     private final ReservedDateRepository reservedDateRepository;
     private final AccommodationRepository accommodationRepository;
@@ -38,7 +39,7 @@ public class ReservationService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public boolean createPreReservation(Long accommodationId, ReservationRequestDto.CreateReservationDto createReservationDto, long daysToReserve){
+    public boolean createPreReservation(Long accommodationId, ReservationRequestDto.CreateReservationDto createReservationDto, long daysToReserve) {
         // DB에 실제 예약된 날짜가 있는지 확인
         List<ReservedDate> alreadyReservedDates = reservedDateRepository.findReservedDates(
                 accommodationId, createReservationDto.getCheckInDate(), createReservationDto.getCheckOutDate());
@@ -55,7 +56,7 @@ public class ReservationService {
         Accommodation accommodation = accommodationRepository.findById(accommodationId)
                 .orElseThrow(AccommodationNotFoundException::new);
 
-        for (int n = 0; n < daysToReserve - 1; n++) {
+        for (int n = 0; n < daysToReserve; n++) {
             ReservedDate reservedDate = ReservedDate.builder()
                     .reservedAt(createReservationDto.getCheckInDate().plusDays(n))
                     .status(ReservationStatus.PENDING)
@@ -104,11 +105,13 @@ public class ReservationService {
     public void cancelReservation(Long reservationId) {
         Reservation reservation = reservationRepository.findById(reservationId)
                 .orElseThrow(ReservationNotFoundException::new);
+        Long accommodationId = reservation.getAccommodation().getId();
+        LocalDate checkIn = reservation.getCheckIn().toLocalDate();
+        LocalDate checkOut = reservation.getCheckOut().toLocalDate();
 
-        reservedDateRepository.deleteReservedDates(reservation.getAccommodation().getId(),
-                LocalDate.of(reservation.getCheckIn().getYear(), reservation.getCheckIn().getMonth(), reservation.getCheckIn().getDayOfMonth()),
-                LocalDate.of(reservation.getCheckOut().getYear(), reservation.getCheckOut().getMonth(), reservation.getCheckOut().getDayOfMonth()));
+        bookedDateCache.release(accommodationId, checkIn, checkOut);
 
+        reservedDateRepository.deleteReservedDates(accommodationId, checkIn, checkOut);
         reservationRepository.delete(reservation);
 
         eventPublisher.publishEvent(new ReservationChangedEvent(reservation.getAccommodation().getId()));

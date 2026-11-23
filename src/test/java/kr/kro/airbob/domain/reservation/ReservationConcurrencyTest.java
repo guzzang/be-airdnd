@@ -10,17 +10,22 @@ import kr.kro.airbob.domain.accommodation.repository.OccupancyPolicyRepository;
 import kr.kro.airbob.domain.member.Member;
 import kr.kro.airbob.domain.member.MemberRepository;
 import kr.kro.airbob.domain.member.common.MemberRole;
+import kr.kro.airbob.domain.reservation.BookedDateCache.ClaimResult;
+import kr.kro.airbob.domain.reservation.common.ReservationStatus;
 import kr.kro.airbob.domain.reservation.dto.ReservationRequestDto;
 import kr.kro.airbob.domain.reservation.entity.Reservation;
+import kr.kro.airbob.domain.reservation.entity.ReservedDate;
 import kr.kro.airbob.domain.reservation.repository.ReservationRepository;
 import kr.kro.airbob.domain.reservation.repository.ReservedDateRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
@@ -31,6 +36,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,7 +75,10 @@ public class ReservationConcurrencyTest {
     private ReservedDateRepository reservedDateRepository;
 
     @Autowired
-    private RedissonClient redissonClient;
+    private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private BookedDateCache bookedDateCache;
 
     private Long savedAccommodationId;
 
@@ -100,6 +110,8 @@ public class ReservationConcurrencyTest {
         // Redis
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+
+        registry.add("search.enabled", () -> "false");
     }
 
     @BeforeEach
@@ -111,7 +123,10 @@ public class ReservationConcurrencyTest {
         occupancyPolicyRepository.deleteAllInBatch();
         addressRepository.deleteAllInBatch();
         memberRepository.deleteAllInBatch();
-        redissonClient.getKeys().flushall();
+        redisTemplate.execute((RedisCallback<Void>) (RedisConnection connection) -> {
+            connection.serverCommands().flushAll();
+            return null;
+        });
 
         // 1. 10명의 회원 등록
         for (long i = 1; i <= 10; i++) {
@@ -164,18 +179,19 @@ public class ReservationConcurrencyTest {
     }
 
     @Test
-    @DisplayName("동시에 같은 숙소/날짜로 예약 요청을 진행해도 분산락은 하나의 예약만 진행시켜야 한다.")
+    @DisplayName("동시에 같은 숙소/날짜로 예약 요청을 진행해도 하나의 예약만 진행되어야 한다.")
     void concurrentReservation_shouldAllowOnlyOneSuccess() throws InterruptedException {
         //given
         Long accommodationId = savedAccommodationId;
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 22);
+        LocalDate checkIn = LocalDate.now().plusMonths(1);
+        LocalDate checkOut = checkIn.plusDays(2);
 
-        int threadCount = 10;
+        int threadCount = 100;
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch doneLatch = new CountDownLatch(threadCount);
         AtomicInteger acquired = new AtomicInteger();
+        Queue<Throwable> errors = new ConcurrentLinkedQueue<>();
 
         //when
         for (int i = 0; i < threadCount; i++) {
@@ -183,11 +199,12 @@ public class ReservationConcurrencyTest {
                 try {
                     startLatch.await();
                     var daysToReserve = ReservationRequestDto.CreateReservationDto.builder()
-                            .checkInDate(checkIn).checkOutDate(checkOut).message("락 검증").build();
+                            .checkInDate(checkIn).checkOutDate(checkOut).message("동시성 테스트").build();
 
                     boolean reserved = reservationFacade.preReserveDates(accommodationId, daysToReserve);
                     if (reserved) acquired.incrementAndGet();
-                } catch (Exception ignored) {
+                } catch (Throwable e) {
+                    errors.add(e);
                 } finally {
                     doneLatch.countDown();
                 }
@@ -198,82 +215,24 @@ public class ReservationConcurrencyTest {
         executorService.shutdown();
 
         // then
+        assertThat(errors)
+                .as("예외 없이 성공 또는 실패로 끝나야 한다")
+                .isEmpty();
         assertThat(acquired.get())
-                .as("분산락은 정확히 하나의 예약만 통과시켜야 한다")
+                .as("정확히 하나의 예약만 통과해야 한다")
                 .isEqualTo(1);
+        assertThat(reservedDateRepository.findAll())
+                .as("DB에는 2박만 중복 없이 저장되어야 한다")
+                .extracting(ReservedDate::getReservedAt)
+                .containsExactlyInAnyOrder(checkIn, checkIn.plusDays(1));
     }
 
     @Test
-    @DisplayName("동일 숙소에 대해 동일 날짜에 여러 사용자가 예약 진행 시 먼저 예약을 진행한 사용자의 예약이 DB에 등록되어야 한다.")
-    void firstAcquirer_ShouldCommitDataSuccessfully() throws InterruptedException {
-        // given
-        int threadCount = 100;
-        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
-        CountDownLatch startLatchForOthers = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(threadCount);
-
-        Long accommodationId = accommodationRepository.findById(savedAccommodationId).get().getId();
-        Long firstMemberId = memberRepository.findAll().get(0).getId();
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 22);
-
-        ReservationRequestDto.CreateReservationDto dto =
-                ReservationRequestDto.CreateReservationDto.builder()
-                        .checkInDate(checkIn)
-                        .checkOutDate(checkOut)
-                        .message("동시성 테스트")
-                        .build();
-
-        // when
-        executorService.submit(() -> {
-            try {
-                boolean result = reservationFacade.preReserveDates(accommodationId, dto);
-                if (result) {
-                    reservationService.createReservation(firstMemberId, accommodationId, dto);
-                }
-            } finally {
-                doneLatch.countDown();
-            }
-        });
-
-        Thread.sleep(30);
-
-        for (int i = 2; i <= threadCount; i++) {
-            final long memberId = i;
-            executorService.submit(() -> {
-                try {
-                    startLatchForOthers.await();
-                    boolean result = reservationFacade.preReserveDates(accommodationId, dto);
-                    if (result) {
-                        reservationService.createReservation(memberId, accommodationId, dto);
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
-        }
-
-        startLatchForOthers.countDown();
-
-        doneLatch.await();
-        executorService.shutdown();
-
-        // then
-         List<Reservation> allReservations = reservationRepository.findAll();
-
-        // 예약은 반드시 1개여야 하고, 그 주인은 반드시 첫번째로 예약한 사람이어야함
-        assertThat(allReservations).hasSize(1);
-        assertThat(allReservations.get(0).getGuest().getId()).isEqualTo(firstMemberId);
-    }
-
-    @Test
-    @DisplayName("락이 동작하지 않아도 DB UNIQUE 제약이 중복 예약을 최종적으로 막아야 한다.")
+    @DisplayName("Redis가 동작하지 않아도 DB UNIQUE 제약이 중복 예약을 최종적으로 막아야 한다.")
     void dbUnique_blocksDuplicate_evenWithoutLock() throws InterruptedException {
         Long accommodationId = savedAccommodationId;
-        LocalDate checkIn = LocalDate.of(2025, 6, 20);
-        LocalDate checkOut = LocalDate.of(2025, 6, 22);
+        LocalDate checkIn = LocalDate.now().plusMonths(1);
+        LocalDate checkOut = checkIn.plusDays(2);
         long daysToReserve = ChronoUnit.DAYS.between(checkIn, checkOut);
 
         int threadCount = 10;
@@ -307,11 +266,39 @@ public class ReservationConcurrencyTest {
 
         // then
         assertThat(success.get())
-                .as("락이 없어도 DB UNIQUE 제약으로 하나의 예약만 저장에 성공해야한다.")
+                .as("Redis 동작 없이도 DB UNIQUE 제약으로 하나의 예약만 저장에 성공해야한다.")
                 .isEqualTo(1);
         assertThat(blocked.get())
                 .as("나머지는 UNIQUE 제약 위반으로 차단되어야 한다.")
                 .isEqualTo(threadCount - 1);
+    }
+
+    @Test
+    @DisplayName("DB에 이미 예약된 날짜가 있으면, 캐시가 비어 있어도 DB에서 예약 날짜를 가져오므로 BOOKED가 반환되어야 한다.")
+    void tryClaim_loadsExistingReservationsFromDb() {
+        // given
+        Accommodation accommodation = accommodationRepository.findById(savedAccommodationId).orElseThrow();
+        LocalDate checkIn = LocalDate.now().plusMonths(1);
+        LocalDate checkOut = checkIn.plusDays(2);
+        LocalDate reservedInDb = checkIn.plusDays(1);
+
+        reservedDateRepository.save(ReservedDate.builder()
+                .reservedAt(reservedInDb)
+                .status(ReservationStatus.COMPLETED)
+                .accommodation(accommodation)
+                .build());
+
+        // when
+        ClaimResult result = bookedDateCache.tryClaim(savedAccommodationId, checkIn, checkOut);
+
+        // then
+        String key = "booked:accommodation:" + savedAccommodationId;
+        assertThat(result)
+                .as("DB에 있는 예약 날짜와 겹치면 BOOKED여야 한다")
+                .isEqualTo(ClaimResult.BOOKED);
+        assertThat(redisTemplate.opsForSet().members(key))
+                .as("Redis에는 DB에서 가져온 예약 날짜만 있어야 한다")
+                .containsExactlyInAnyOrder("_loaded", reservedInDb.toString());
     }
 
 }

@@ -16,8 +16,10 @@ import kr.kro.airbob.domain.reservation.repository.ReservationRepository;
 import kr.kro.airbob.domain.review.AccommodationReviewSummary;
 import kr.kro.airbob.domain.review.repository.AccommodationReviewSummaryRepository;
 import lombok.RequiredArgsConstructor;
+import kr.kro.airbob.search.ConditionalOnSearchEnabled;
 
-//@Component
+@Component
+@ConditionalOnSearchEnabled
 @RequiredArgsConstructor
 public class AccommodationIndexUpdater {
 

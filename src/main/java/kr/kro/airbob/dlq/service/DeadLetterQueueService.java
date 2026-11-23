@@ -18,8 +18,10 @@ import kr.kro.airbob.dlq.repository.FailedEventRepository;
 import kr.kro.airbob.dlq.reprocessor.AccommodationEventReprocessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import kr.kro.airbob.search.ConditionalOnSearchEnabled;
 
-//@Service
+@Service
+@ConditionalOnSearchEnabled
 @Slf4j
 @RequiredArgsConstructor
 public class DeadLetterQueueService {
