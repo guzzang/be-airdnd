@@ -1,5 +1,6 @@
 package kr.kro.airbob.cursor.resolver;
 
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
@@ -15,6 +16,7 @@ import kr.kro.airbob.cursor.util.CursorDecoder;
 import lombok.RequiredArgsConstructor;
 
 @Component
+@Primary
 @RequiredArgsConstructor
 public class CursorParamArgumentResolver implements HandlerMethodArgumentResolver {
 

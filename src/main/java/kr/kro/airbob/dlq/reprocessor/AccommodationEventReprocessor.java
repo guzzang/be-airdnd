@@ -12,8 +12,10 @@ import kr.kro.airbob.search.service.AccommodationDocumentBuilder;
 import kr.kro.airbob.search.service.AccommodationIndexUpdater;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import kr.kro.airbob.search.ConditionalOnSearchEnabled;
 
 @Component
+@ConditionalOnSearchEnabled
 @Slf4j
 @RequiredArgsConstructor
 public class AccommodationEventReprocessor {

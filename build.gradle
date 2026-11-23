@@ -10,7 +10,7 @@ version = '0.0.1-SNAPSHOT'
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
+		languageVersion = JavaLanguageVersion.of(17)
 	}
 }
 
@@ -58,12 +58,12 @@ dependencies {
 	//Redis
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-	//Redisson
-	implementation 'org.redisson:redisson:3.28.0'
-
 	// Flyway
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-mysql'
+
+	// actuator
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'

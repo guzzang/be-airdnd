@@ -18,8 +18,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.elasticsearch.repository.config.EnableElasticsearchRepositories;
+import kr.kro.airbob.search.ConditionalOnSearchEnabled;
 
 @Configuration
+@ConditionalOnSearchEnabled
 @EnableElasticsearchRepositories
 public class ElasticsearchConfig {
 

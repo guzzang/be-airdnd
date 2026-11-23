@@ -18,8 +18,10 @@ import kr.kro.airbob.search.document.AccommodationDocument;
 import kr.kro.airbob.search.repository.AccommodationSearchRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import kr.kro.airbob.search.ConditionalOnSearchEnabled;
 
 @Service
+@ConditionalOnSearchEnabled
 @Slf4j
 @RequiredArgsConstructor
 public class AccommodationIndexingService {

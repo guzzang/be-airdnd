@@ -34,6 +34,11 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: 6379
+      timeout: 500ms            # 명령 응답 대기 한도 (Lettuce 기본 60s). 평소 응답은 1ms 안팎
+      connect-timeout: 500ms    # 연결 맺기 대기 한도 (Lettuce 기본 10s)
+    elasticsearch:
+      repositories:
+        enabled: ${search.enabled:true}   # search.enabled=false면 Spring Boot 자동 설정도 검색 저장소를 만들지 않음
 
   jackson:
     property-naming-strategy: SNAKE_CASE
